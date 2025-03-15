@@ -141,7 +141,7 @@ namespace gfx
         UINT64 TotalAllocated;
         UINT64 TotalFreed;
         
-        [conditional("TRACK_MEMORY_PRESSURE")]
+        [conditional("defined(TRACK_MEMORY_PRESSURE)")]
         MemoryPressure Pressure;
     };
     
@@ -157,7 +157,7 @@ namespace gfx
         UINT64 GetTotalFreedMemory();
         
         [removed(10,0,22000,0)]
-        [conditional("TRACK_MEMORY_PRESSURE")]
+        [conditional("defined(TRACK_MEMORY_PRESSURE)")]
         MemoryPressure GetMemoryPressure();
         
         [added(10,0,22000,0)]
