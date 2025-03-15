@@ -39,7 +39,8 @@ public abstract record TypeDeclarationNode(
     string? Name,
     ImmutableArray<BaseTypeNode> BaseTypes,
     ImmutableArray<MemberNode> Members,
-    bool IsConst = false) : TypeNode(IsConst), IAttributableNode, INamedNode
+    bool IsConst = false,
+    string? Namespace = null) : TypeNode(IsConst), IAttributableNode, INamedNode
 {
     public abstract string DeclarationType { get; }
 }
@@ -58,7 +59,8 @@ public sealed record EnumNode(
     string? Name,
     BaseTypeNode? BaseType,
     ImmutableArray<EnumMemberNode> EnumMembers,
-    bool IsConst = false) : TypeDeclarationNode(Attributes, Name, BaseType != null ? [BaseType] : [], [..EnumMembers], IsConst)
+    bool IsConst = false,
+    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseType != null ? [BaseType] : [], [..EnumMembers], IsConst, Namespace)
 {
     /// <inheritdoc/>
     public override string DeclarationType => "enum";
@@ -72,7 +74,8 @@ public sealed record InterfaceNode(
     string Name,
     ImmutableArray<BaseTypeNode> BaseTypes,
     ImmutableArray<MemberNode> Members,
-    bool IsConst = false) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst)
+    bool IsConst = false,
+    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst, Namespace)
 {
     /// <inheritdoc/>
     public override string DeclarationType => "interface";
@@ -86,7 +89,8 @@ public sealed record UnionNode(
     string? Name,
     ImmutableArray<BaseTypeNode> BaseTypes,
     ImmutableArray<MemberNode> Members,
-    bool IsConst = false) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst)
+    bool IsConst = false,
+    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst, Namespace)
 {
     /// <inheritdoc/>
     public override string DeclarationType => "union";
@@ -100,7 +104,8 @@ public sealed record StructNode(
     string? Name,
     ImmutableArray<BaseTypeNode> BaseTypes,
     ImmutableArray<MemberNode> Members,
-    bool IsConst = false) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst)
+    bool IsConst = false,
+    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst, Namespace)
 {
     /// <inheritdoc/>
     public override string DeclarationType => "struct";
@@ -114,7 +119,8 @@ public sealed record ClassNode(
     string? Name,
     ImmutableArray<BaseTypeNode> BaseTypes,
     ImmutableArray<MemberNode> Members,
-    bool IsConst = false) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst)
+    bool IsConst = false,
+    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseTypes, Members, IsConst, Namespace)
 {
     /// <inheritdoc/>
     public override string DeclarationType => "class";

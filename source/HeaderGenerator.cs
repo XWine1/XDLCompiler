@@ -5,8 +5,6 @@ namespace XDLCompiler;
 
 public class HeaderGenerator
 {
-    private readonly string _namespace = "xbox";
-
     private readonly List<ImportNode> _imports = [];
 
     private readonly Dictionary<string, TypeDeclarationNode> _types = [];
@@ -75,12 +73,17 @@ public class HeaderGenerator
             writer.WriteLine($"#include \"{includeName}\"");
         }
 
-        writer.WriteLine();
-        writer.WriteLine($"namespace {_namespace}");
-        writer.WriteLine('{');
-        writer.Indent++;
+        void AddAbiType(TypeDeclarationNode node)
+        {
+            var name = node.Name!;
+            var vtbl = name + "Vtbl";
+            _abiTypes.Add(name);
+            _abiTypes.Add(vtbl);
+            _remap.TryAdd(name, GetQualifiedName(node) + "<ABI>");
+            _remap.TryAdd(vtbl, GetQualifiedName(node) + "Vtbl<ABI>");
+        }
 
-        foreach (var node in Enumerable.Concat(_types.Values, _importedTypes.Values).OfType<TypeDeclarationNode>())
+        foreach (var node in _allTypes.Values)
         {
             _versions.Clear();
             node.Accept(new AbiVersionVisitor(_allTypes, _versions));
@@ -89,11 +92,11 @@ public class HeaderGenerator
             // This means it is templated and needs to be referenced with <ABI>.
             if (_versions.Count > 0 || node.TryGetAttribute<ForceAbiAttribute>(out _))
             {
-                _abiTypes.Add(node.Name!);
+                AddAbiType(node);
             }
         }
 
-        foreach (var node in _types.Values.OfType<TypeDeclarationNode>())
+        foreach (var node in _types.Values)
         {
             var isAbi = new StrongBox<bool>();
             node.Accept(new HasAbiTypesVisitor(_abiTypes, isAbi));
@@ -101,21 +104,17 @@ public class HeaderGenerator
             // If the type has any ABI type members, it is considered an ABI type.
             if (isAbi.Value)
             {
-                _abiTypes.Add(node.Name!);
+                AddAbiType(node);
             }
         }
 
-        foreach (var name in _abiTypes)
+        foreach (var node in _allTypes.Values)
         {
-            var vtbl = name + "Vtbl";
-            _remap.Add(name, name + "<ABI>");
-            _remap.Add(vtbl, vtbl + "<ABI>");
+            _remap.TryAdd(node.Name!, GetQualifiedName(node)!);
+            _remap.TryAdd(node.Name! + "Vtbl", GetQualifiedName(node)! + "Vtbl");
         }
 
         WriteTypes(writer);
-
-        writer.Indent--;
-        writer.WriteLine('}');
         writer.WriteLine();
         WriteInterfaceTraits(writer);
 
@@ -135,12 +134,44 @@ public class HeaderGenerator
     public void WriteTypes(IndentedTextWriter writer)
     {
         ArgumentNullException.ThrowIfNull(writer);
-        
+
+        string? currentNamespace = null;
+
+        void SetNamespace(string? ns)
+        {
+            if (currentNamespace == ns)
+                return;
+
+            if (currentNamespace != null)
+            {
+                writer.Indent--;
+                writer.WriteLine('}');
+
+                if (!string.IsNullOrEmpty(ns))
+                {
+                    writer.WriteLine();
+                }
+            }
+
+            if (!string.IsNullOrEmpty(ns))
+            {
+                writer.WriteLine($"namespace {ns.Replace(".", "::")}");
+                writer.WriteLine('{');
+                writer.Indent++;
+            }
+
+            currentNamespace = ns;
+        }
+
+        writer.WriteLine();
+
         // Forward declarations
         foreach (var node in _types.Values.OfType<TypeDeclarationNode>())
         {
             if (node.TryGetAttribute<NoEmitAttribute>(out _))
                 continue;
+
+            SetNamespace(node.Namespace);
 
             if (_abiTypes.Contains(node.Name!))
                 writer.WriteLine("template<abi_t ABI>");
@@ -172,12 +203,16 @@ public class HeaderGenerator
             if (node.TryGetAttribute<NoEmitAttribute>(out _))
                 continue;
 
+            SetNamespace(node.Namespace);
+
             if (written > 0)
                 writer.WriteLine();
 
             WriteDeclaration(node, writer);
             written++;
         }
+
+        SetNamespace(null);
     }
 
     public void WriteInterfaceTraits(IndentedTextWriter writer)
@@ -198,7 +233,7 @@ public class HeaderGenerator
                 else
                     writer.Write("DECLARE_UUIDOF_HELPER");
 
-                writer.Write($"({_namespace}::{node.Name}, ");
+                writer.Write($"({GetQualifiedName(node)}, ");
                 writer.Write($"0x{guid.A:X8},0x{guid.B:X4},0x{guid.C:X4},");
                 writer.Write($"0x{guid.D:X2},0x{guid.E:X2},0x{guid.F:X2},0x{guid.G:X2},");
                 writer.Write($"0x{guid.H:X2},0x{guid.I:X2},0x{guid.J:X2},0x{guid.K:X2}");
@@ -226,7 +261,7 @@ public class HeaderGenerator
             if (node.TryGetAttribute<NoEmitAttribute>(out _))
                 continue;
 
-            var name = _namespace + "::" + node.Name;
+            var name = GetQualifiedName(node)!;
             var vtbl = name + "Vtbl";
 
             if (_abiTypes.Contains(node.Name!))
@@ -361,7 +396,7 @@ public class HeaderGenerator
         writer.WriteLine(')');
     }
 
-    private static void WriteConditionalBases(TypeDeclarationNode node, IndentedTextWriter writer)
+    private void WriteConditionalBases(TypeDeclarationNode node, IndentedTextWriter writer)
     {
         var baseAbi = GetBaseTypeAbiVersions(node);
 
@@ -394,9 +429,8 @@ public class HeaderGenerator
                     else
                         writer.Write(" : ");
 
-                    writer.Write(baseType.Name);
-                    writer.Write(suffix);
-                    writer.Write("<ABI>");
+                    var name = baseType.Name + suffix;
+                    writer.Write(_remap.GetValueOrDefault(name, name));
                 }
 
                 writer.WriteLine(" {};");
@@ -551,12 +585,7 @@ public class HeaderGenerator
                     if (j > 0)
                         writer.Write(", ");
 
-                    writer.Write(baseType.Name);
-
-                    if (_abiTypes.Contains(baseType.Name!))
-                    {
-                        writer.Write("<ABI>");
-                    }
+                    writer.Write(_remap.GetValueOrDefault(baseType.Name, baseType.Name));
                 }
             }
 
@@ -670,13 +699,8 @@ public class HeaderGenerator
                     else
                         writer.Write(" : ");
 
-                    writer.Write(baseType.Name);
-                    writer.Write("Vtbl");
-
-                    if (_abiTypes.Contains(baseType.Name!))
-                    {
-                        writer.Write("<ABI>");
-                    }
+                    var name = baseType.Name + "Vtbl";
+                    writer.Write(_remap.GetValueOrDefault(name, name));
                 }
             }
 
@@ -742,6 +766,14 @@ public class HeaderGenerator
     private static void WriteAbiVersion(Version version, TextWriter writer)
     {
         writer.Write($"abi_t{{{version.Major},{version.Minor},{version.Build},{version.Revision}}}");
+    }
+
+    private static string? GetQualifiedName(TypeDeclarationNode node)
+    {
+        if (string.IsNullOrEmpty(node.Namespace) || string.IsNullOrEmpty(node.Name))
+            return node.Name;
+
+        return node.Namespace.Replace(".", "::") + "::" + node.Name;
     }
 
     private sealed class DataAbiVersionCollector(ICollection<Version> versions) : SyntaxVisitor
@@ -927,5 +959,4 @@ public class HeaderGenerator
             }
         }
     }
-
 }

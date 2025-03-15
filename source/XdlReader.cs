@@ -55,7 +55,7 @@ public sealed class XdlReader
         case TokenId.Union:
         case TokenId.Interface:
         case TokenId.Enum:
-            node = ReadDeclaration(attributes);
+            node = ReadDeclaration(attributes) with { Namespace = GetCurrentNamespace() };
             Expect(TokenId.Semicolon);
             break;
         case TokenId.Namespace:
@@ -69,6 +69,14 @@ public sealed class XdlReader
         }
 
         return true;
+    }
+
+    private string? GetCurrentNamespace()
+    {
+        if (_namespaceDepth == 0)
+            return null;
+
+        return string.Join('.', _namespaces.Reverse());
     }
 
     private ImportNode ReadImport()
