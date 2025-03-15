@@ -19,6 +19,7 @@ jobs:
     strategy:
       matrix:
         configuration: [ 'Debug', 'Release' ]
+        runtime: [ 'win-x64' ]
 
     steps:
     - uses: actions/checkout@v4
@@ -31,13 +32,13 @@ jobs:
 
     - name: Build
       run: |
-        dotnet build --configuration ${{ matrix.configuration }}
+        dotnet publish -r ${{ matrix.runtime }} --configuration ${{ matrix.configuration }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Artifacts ${{ matrix.configuration }}
-        path: artifacts/bin/XDLCompiler/${{ matrix.configuration }}/**
+        name: Artifacts ${{ matrix.configuration }} ${{ matrix.runtime }}
+        path: artifacts/publish/XDLCompiler/${{ matrix.configuration }}_${{ matrix.runtime }}/**
         if-no-files-found: error
 
     - name: Trigger release on tag
