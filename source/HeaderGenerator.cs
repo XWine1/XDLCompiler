@@ -573,6 +573,9 @@ public class HeaderGenerator
 
             if (hasConditionalBases)
             {
+                if (node is ClassNode)
+                    writer.Write("public ");
+
                 writer.Write("details::");
                 writer.Write(node.Name);
                 writer.Write("Base");
@@ -584,6 +587,9 @@ public class HeaderGenerator
                 {
                     if (j > 0)
                         writer.Write(", ");
+
+                    if (node is ClassNode)
+                        writer.Write("public ");
 
                     writer.Write(_remap.GetValueOrDefault(baseType.Name, baseType.Name));
                 }
