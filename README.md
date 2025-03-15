@@ -1,6 +1,6 @@
 # XDL Compiler
 
-XDL is a definition language similar to Microsoft IDL but with versioning support and less stricter rules.
+XDL is a definition language similar to Microsoft IDL but with versioning support and less strict rules.
 
 ### Usage
 
@@ -61,7 +61,7 @@ HRESULT CreateMyVersionedClass(void** ppClass)
 
 ### Examples
 
-The following example showcases how define a simple interface that makes use of basic XDL versioning features
+The following example showcases how to define a simple interface that makes use of basic XDL versioning features
 
 ```csharp
 import "unknown.xdl";
@@ -97,7 +97,7 @@ namespace simple_example
 }
 ```
 
-The following example showcases how define complex interfaces/classes that make use of more advanced XDL versioning features
+The following example showcases how to define complex interfaces/classes that make use of more advanced XDL versioning features
 
 ```csharp
 import "unknown.xdl";
