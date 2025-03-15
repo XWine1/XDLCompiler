@@ -14,6 +14,8 @@ static void Run(string[] args)
     var generator = new HeaderGenerator();
     var headerName = generator.GetHeaderName(args[0]);
 
+    Directory.CreateDirectory(args[1]);
+
     using (var file = new StreamWriter(File.Create(Path.Combine(args[1], headerName))))
     using (var writer = new IndentedTextWriter(file))
     {

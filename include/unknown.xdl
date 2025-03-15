@@ -1,0 +1,32 @@
+[no_emit]
+[uuid("00000000-0000-0000-C000-000000000046")]
+interface IUnknown
+{
+    HRESULT QueryInterface(REFIID riid, void **ppvObject);
+    ULONG AddRef();
+    ULONG Release();
+};
+
+namespace xbox
+{
+    [uuid("ACEEEA63-E0A9-4A1C-BBEC-71B2F485F758")]
+    interface IGraphicsUnknown : IUnknown
+    {
+        [added(10,0,14393,2152)]
+        {
+            ULONG m_DeviceIndex : 3;
+            ULONG m_PrivateDataPresent : 1;
+
+            [added(10,0,19041,3453)]
+            ULONG m_DisableCollectiveRefCount : 1;
+
+            [removed(10,0,19041,3453)]
+            ULONG m_Reserved : 28;
+
+            [added(10,0,19041,3453)]
+            ULONG m_Reserved : 27;
+        }
+
+        ULONG m_RefCount;
+    };
+}
