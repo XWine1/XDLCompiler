@@ -68,32 +68,32 @@ import "unknown.xdl";
 
 namespace simple_example
 {
-	[uuid("f0d7fd9c-33a3-4fc3-abe1-511c8917dbf6")]
-	interface ISimpleClass : IUnknown
-	{
-		[removed(10,0,15063,0)]
-		UINT m_StringsCount;
-		
-		[added(10,0,15063,0)]
-		UINT64 m_StringsCount;
-		
-		[removed(10,0,15063,0)]
-		UINT AddString([in] LPCSTR pString);
-		
-		[added(10,0,15063,0)]
-		UINT64 AddString([in] LPCWSTR lpString);
-		
-		[removed(10,0,15063,0)]
-		UINT GetString([out] LPCSTR pString, [in] UINT size, [in] UINT index);
-		
-		[added(10,0,15063,0)]
-		UINT64 GetString([out] LPCWSTR lpString, [in] UINT64 size, [in] UINT64 index);
-	};
-	
-	class SimpleClass : ISimpleClass
-	{
-		
-	};
+    [uuid("f0d7fd9c-33a3-4fc3-abe1-511c8917dbf6")]
+    interface ISimpleClass : IUnknown
+    {
+        [removed(10,0,15063,0)]
+        UINT m_StringsCount;
+        
+        [added(10,0,15063,0)]
+        UINT64 m_StringsCount;
+        
+        [removed(10,0,15063,0)]
+        UINT AddString([in] LPCSTR pString);
+        
+        [added(10,0,15063,0)]
+        UINT64 AddString([in] LPCWSTR lpString);
+        
+        [removed(10,0,15063,0)]
+        UINT GetString([out] LPCSTR pString, [in] UINT size, [in] UINT index);
+        
+        [added(10,0,15063,0)]
+        UINT64 GetString([out] LPCWSTR lpString, [in] UINT64 size, [in] UINT64 index);
+    };
+    
+    class SimpleClass : ISimpleClass
+    {
+        
+    };
 }
 ```
 
@@ -104,75 +104,75 @@ import "unknown.xdl";
 
 namespace gfx
 {
-	struct GraphicsClassDesc
-	{
-		UINT TexturesCapacity;
-		[added(6,2,9200,0)] UINT ShadersCapacity;
-		[added(10,0,15063,0), removed(10,0,22000,0)] UINT ViewsCapacity;
-		[removed(10,0,18362,0)] UINT OpaqueDataCapacity;
-	};
+    struct GraphicsClassDesc
+    {
+        UINT TexturesCapacity;
+        [added(6,2,9200,0)] UINT ShadersCapacity;
+        [added(10,0,15063,0), removed(10,0,22000,0)] UINT ViewsCapacity;
+        [removed(10,0,18362,0)] UINT OpaqueDataCapacity;
+    };
 
-	[uuid("b54c4d35-8172-4575-9362-a614d34a834b")]
-	interface IGraphicsClass : IGraphicsUnknown
-	{
-		GraphicsClassDesc m_Desc;
-		
-		HRESULT Initialize([in] IUnknown* pGraphicsDevice);
-		void GetDevice([out] IUnknown** ppGraphicsDevice);
-		
-		[added(10,0,22000,0)]
-		HRESULT UpdateDevice(IUnknown* pGraphicsDevice);
-	};
-	
-	class SomeGraphicsClass : IGraphicsClass
-	{
-		
-	};
-	
-	enum MemoryPressure
-	{
-		Low,
-		Medium,
-		High
-	};
-	
-	struct MemoryInfo
-	{
-		UINT64 TotalAllocated;
-		UINT64 TotalFreed;
-		
-		[conditional("TRACK_MEMORY_PRESSURE")]
-		MemoryPressure Pressure;
-	};
-	
-	[uuid("1bc4eedb-9043-47ad-9572-590d1e50771b")]
-	interface IMemoryManager : IUnknown
-	{
-		HRESULT AllocateMemory([in] UINT64 size, [out] void** ppMemory);
-		
-		[removed(10,0,22000,0)]
-		UINT64 GetTotalAllocatedMemory();
-		
-		[removed(10,0,22000,0)]
-		UINT64 GetTotalFreedMemory();
-		
-		[removed(10,0,22000,0)]
-		[conditional("TRACK_MEMORY_PRESSURE")]
-		MemoryPressure GetMemoryPressure();
-		
-		[added(10,0,22000,0)]
-		void GetMemoryInfo([out] MemoryInfo* pMemoryInfo);
-	};
-	
-	[uuid("a97f9933-9696-423d-9e2a-44c9cefbd058")]
-	interface IMemoryManager2 : [removed(10,0,26100,0)] IUnknown, [added(10,0,26100,0)] IMemoryManager
-	{
-		HRESULT FreeMemory([in] void* ppMemory);
-	};
-	
-	class MemoryManager : [removed(10,0,26100,0)] IMemoryManager, [added(10,0,22631,0)] IMemoryManager2
-	{
-		
-	};
+    [uuid("b54c4d35-8172-4575-9362-a614d34a834b")]
+    interface IGraphicsClass : IGraphicsUnknown
+    {
+        GraphicsClassDesc m_Desc;
+        
+        HRESULT Initialize([in] IUnknown* pGraphicsDevice);
+        void GetDevice([out] IUnknown** ppGraphicsDevice);
+        
+        [added(10,0,22000,0)]
+        HRESULT UpdateDevice(IUnknown* pGraphicsDevice);
+    };
+    
+    class SomeGraphicsClass : IGraphicsClass
+    {
+        
+    };
+    
+    enum MemoryPressure
+    {
+        Low,
+        Medium,
+        High
+    };
+    
+    struct MemoryInfo
+    {
+        UINT64 TotalAllocated;
+        UINT64 TotalFreed;
+        
+        [conditional("TRACK_MEMORY_PRESSURE")]
+        MemoryPressure Pressure;
+    };
+    
+    [uuid("1bc4eedb-9043-47ad-9572-590d1e50771b")]
+    interface IMemoryManager : IUnknown
+    {
+        HRESULT AllocateMemory([in] UINT64 size, [out] void** ppMemory);
+        
+        [removed(10,0,22000,0)]
+        UINT64 GetTotalAllocatedMemory();
+        
+        [removed(10,0,22000,0)]
+        UINT64 GetTotalFreedMemory();
+        
+        [removed(10,0,22000,0)]
+        [conditional("TRACK_MEMORY_PRESSURE")]
+        MemoryPressure GetMemoryPressure();
+        
+        [added(10,0,22000,0)]
+        void GetMemoryInfo([out] MemoryInfo* pMemoryInfo);
+    };
+    
+    [uuid("a97f9933-9696-423d-9e2a-44c9cefbd058")]
+    interface IMemoryManager2 : [removed(10,0,26100,0)] IUnknown, [added(10,0,26100,0)] IMemoryManager
+    {
+        HRESULT FreeMemory([in] void* ppMemory);
+    };
+    
+    class MemoryManager : [removed(10,0,26100,0)] IMemoryManager, [added(10,0,22631,0)] IMemoryManager2
+    {
+        
+    };
 }
 ```
