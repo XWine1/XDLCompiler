@@ -59,6 +59,16 @@ HRESULT CreateMyVersionedClass(void** ppClass)
 }
 ```
 
+### TODO
+
+- [ ] Support full C declarator syntax (including function pointers)
+- [ ] Recognize annotations and translate them to SAL on the C++ types
+- [ ] Support for defining constants
+- [ ] Support for simple expressions with constants (i.e. `1 + 1`)
+- [ ] Proper error checking and better error messages
+- [ ] Support for optionally generating headers for imports
+- [ ] Support for multiple XDL file inputs
+
 ### Examples
 
 The following example showcases how to define a simple interface that makes use of basic XDL versioning features
