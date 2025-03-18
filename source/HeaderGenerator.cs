@@ -1,4 +1,5 @@
 ﻿using System.CodeDom.Compiler;
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 
 namespace XDLCompiler;
@@ -192,6 +193,18 @@ public class HeaderGenerator
                     writer.WriteLine("template<abi_t ABI>");
 
                 writer.WriteLine($"struct {node.Name}Vtbl;");
+                writer.WriteLine();
+            }
+
+            if (HasRcxReturnMethods(node))
+            {
+                writer.Write("template<abi_t ABI, typename Impl, typename Interface = ");
+                writer.Write(node.Name);
+                writer.Write("<ABI>");
+                writer.WriteLine('>');
+                writer.Write("class ");
+                writer.Write(node.Name);
+                writer.WriteLine("_Impl;");
                 writer.WriteLine();
             }
         }
@@ -470,6 +483,8 @@ public class HeaderGenerator
         var dataAbi = GetDataAbiVersions(node);
         var codeAbi = GetCodeAbiVersions(node);
         var mainAbi = node is InterfaceNode ? codeAbi : dataAbi;
+        var thisParam = new ParameterNode([], new PointerTypeNode(new NamedTypeNode("void")), null);
+        bool hasRcxReturnMethods = HasRcxReturnMethods(node);
         bool hasConditionalBases = HasConditionalBases(node);
         bool hasDataMembers = node.EnumerateAllMembers().OfType<FieldNode>().Any();
 
@@ -614,6 +629,13 @@ public class HeaderGenerator
             writer.WriteLine('{');
             writer.Indent++;
 
+            if (hasRcxReturnMethods)
+            {
+                writer.Write("template<abi_t, typename, typename> friend class ");
+                writer.Write(node.Name);
+                writer.WriteLine("_Impl;");
+            }
+
             if (node is InterfaceNode)
             {
                 foreach (var member in node.EnumerateMembers(thisAbi, includeBlocks: true))
@@ -621,13 +643,30 @@ public class HeaderGenerator
                     if (member is MemberBlockNode or MemberBlockEndNode)
                         HandleConditionalAttribute(member, writer, end: false);
 
-                    if (member is not MethodNode)
+                    if (member is not MethodNode method)
                         continue;
 
                     HandleConditionalAttribute(member, writer, end: false);
-                    writer.Write("virtual ");
-                    CFormatter.Write(member, writer, _remap);
-                    writer.WriteLine(" = 0;");
+
+                    if (member.TryGetAttribute<RcxReturnAttribute>(out _))
+                    {
+                        writer.Write("private: virtual ");
+                        var signature = method.Signature with
+                        {
+                            ReturnType = new PointerTypeNode(method.Signature.ReturnType),
+                            Parameters = method.Signature.Parameters.Insert(0, thisParam),
+                        };
+
+                        CFormatter.Write(method with { Name = "_abi_" + member.Name, Signature = signature }, writer, _remap);
+                        writer.WriteLine(" = 0; public:");
+                    }
+                    else
+                    {
+                        writer.Write("virtual ");
+                        CFormatter.Write(member, writer, _remap);
+                        writer.WriteLine(" = 0;");
+                    }
+
                     HandleConditionalAttribute(member, writer, end: true);
                 }
             }
@@ -656,6 +695,128 @@ public class HeaderGenerator
         {
             writer.WriteLine();
             WriteVTable(node, writer);
+        }
+
+        if (hasRcxReturnMethods)
+        {
+            writer.WriteLine();
+            WriteRcxReturnThunks(node, writer);
+        }
+    }
+
+    private TypeDeclarationNode? GetInterfaceBase(TypeDeclarationNode node, Version? abi)
+    {
+        foreach (var baseType in node.BaseTypes)
+        {
+            if (baseType.Exists(abi) && _allTypes.TryGetValue(baseType.Name, out var baseNode))
+            {
+                return baseNode;
+            }
+        }
+
+        return null;
+    }
+
+    private void WriteRcxReturnThunks(TypeDeclarationNode node, IndentedTextWriter writer)
+    {
+        var abi = GetRcxReturnAbiVersions(node);
+        var thisParam = new ParameterNode([], new PointerTypeNode(new NamedTypeNode("void")), "this_");
+
+        for (int i = -1; i < abi.Length; i++)
+        {
+            if (i >= 0)
+                writer.WriteLine();
+
+            var thisAbi = i >= 0 ? abi[i] : null;
+            var nextAbi = i + 1 < abi.Length ? abi[i + 1] : null;
+            var methods = node.EnumerateMembers(thisAbi).OfType<MethodNode>().Where(n => n.TryGetAttribute<RcxReturnAttribute>(out _));
+
+            writer.WriteLine("template<abi_t ABI, typename Impl, typename Interface>");
+            WriteRequiresClause(abi, i, writer);
+            writer.Write("class ");
+            writer.Write(node.Name);
+            writer.Write("_Impl");
+
+            if (i >= 0)
+                writer.Write("<ABI, Impl, Interface>");
+
+            writer.Write(" : public ");
+
+            if (GetInterfaceBase(node, thisAbi) is { } baseNode && HasRcxReturnMethods(baseNode))
+            {
+                writer.Write(baseNode.Name);
+                writer.Write("_Impl");
+                writer.Write("<ABI, Impl, Interface>");
+            }
+            else
+            {
+                writer.Write("Interface");
+            }
+
+            writer.WriteLine();
+            writer.WriteLine('{');
+            writer.Indent++;
+
+            foreach (var (j, method) in methods.Index())
+            {
+                if (j > 0)
+                    writer.WriteLine();
+
+                var builder = ImmutableArray.CreateBuilder<ParameterNode>();
+                builder.Add(thisParam);
+
+                foreach (var (k, param) in method.Signature.Parameters.Index())
+                    builder.Add(param with { Name = "a" + (k + 1) });
+
+                var signature = method.Signature with
+                {
+                    ReturnType = new PointerTypeNode(method.Signature.ReturnType),
+                    Parameters = builder.DrainToImmutable(),
+                };
+
+                CFormatter.Write(method with { Name = "_abi_" + method.Name, Signature = signature }, writer, _remap);
+                writer.WriteLine(" final");
+                writer.WriteLine('{');
+                writer.Indent++;
+                CFormatter.Write(method.Signature.ReturnType, writer, _remap, null);
+                writer.Write("(Impl::*fn)(");
+
+                foreach (var (k, param) in method.Signature.Parameters.Index())
+                {
+                    if (k > 0)
+                        writer.Write(", ");
+
+                    CFormatter.Write(param.Type, writer, _remap, null);
+                }
+
+                writer.Write(") = &Impl::");
+                writer.Write(method.Name);
+                writer.WriteLine(';');
+                writer.Write("return (*(");
+                CFormatter.Write(signature.ReturnType, writer, _remap, null);
+                writer.Write("(**)(void *, void *");
+
+                foreach (var (k, param) in method.Signature.Parameters.Index())
+                {
+                    writer.Write(", ");
+                    CFormatter.Write(param.Type, writer, _remap, null);
+                }
+
+                writer.Write("))&fn)(this_, this");
+
+                for (int k = 0; k < method.Signature.Parameters.Length; k++)
+                {
+                    writer.Write(", ");
+                    writer.Write("a" + (k + 1));
+                }
+
+                writer.WriteLine(");");
+                writer.Indent--;
+                writer.WriteLine('}');
+            }
+
+            writer.Indent--;
+            writer.WriteLine("};");
         }
     }
 
@@ -748,17 +909,48 @@ public class HeaderGenerator
         return false;
     }
 
+    private bool HasRcxReturnMethods(TypeDeclarationNode node)
+    {
+        foreach (var baseType in node.BaseTypes)
+        {
+            if (_allTypes.TryGetValue(baseType.Name, out var baseTypeNode))
+            {
+                if (HasRcxReturnMethods(baseTypeNode))
+                {
+                    return true;
+                }
+            }
+        }
+
+        foreach (var method in node.EnumerateAllMembers().OfType<MethodNode>())
+        {
+            if (method.TryGetAttribute<RcxReturnAttribute>(out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static Version[] GetDataAbiVersions(SyntaxNode node)
     {
         var versions = new HashSet<Version>();
         node.Accept(new DataAbiVersionCollector(versions));
-        return [..versions.Order()];
+        return [.. versions.Order()];
     }
 
     private static Version[] GetCodeAbiVersions(SyntaxNode node)
     {
         var versions = new HashSet<Version>();
         node.Accept(new CodeAbiVersionCollector(versions));
+        return [.. versions.Order()];
+    }
+
+    private static Version[] GetRcxReturnAbiVersions(SyntaxNode node)
+    {
+        var versions = new HashSet<Version>();
+        node.Accept(new RcxReturnAbiVersionCollector(versions));
         return [.. versions.Order()];
     }
 
@@ -816,6 +1008,47 @@ public class HeaderGenerator
 
         public override void Visit(MethodNode node)
         {
+        }
+    }
+
+    private sealed class RcxReturnAbiVersionCollector(ICollection<Version> versions) : SyntaxVisitor
+    {
+        private readonly Stack<MemberBlockNode> _blocks = [];
+
+        public override void Visit(MethodNode node)
+        {
+            if (!node.TryGetAttribute<RcxReturnAttribute>(out _))
+                return;
+
+            if (node.TryGetAttribute(out AbiAddedAttribute? added))
+            {
+                versions.Add(added.Version);
+            }
+
+            if (node.TryGetAttribute(out AbiRemovedAttribute? removed))
+            {
+                versions.Add(removed.Version);
+            }
+
+            foreach (var block in _blocks)
+            {
+                if (block.TryGetAttribute(out added))
+                {
+                    versions.Add(added.Version);
+                }
+
+                if (block.TryGetAttribute(out removed))
+                {
+                    versions.Add(removed.Version);
+                }
+            }
+        }
+
+        public override void Visit(MemberBlockNode node)
+        {
+            _blocks.Push(node);
+            base.Visit(node);
+            _blocks.Pop();
         }
     }
 
