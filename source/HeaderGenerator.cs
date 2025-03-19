@@ -311,7 +311,9 @@ public class HeaderGenerator
                 writer.Indent++;
                 writer.WriteLine("IMPLEMENT_STUB();");
 
-                if (method.Signature.ReturnType is not NamedTypeNode { Name: "void" })
+                if (method.Signature.ReturnType is NamedTypeNode { Name: "HRESULT" })
+                    writer.WriteLine("return E_NOTIMPL;");
+                else if (method.Signature.ReturnType is not NamedTypeNode { Name: "void" })
                     writer.WriteLine("return {};");
 
                 writer.Indent--;
