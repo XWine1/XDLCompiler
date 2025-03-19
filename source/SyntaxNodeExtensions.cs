@@ -57,6 +57,16 @@ public static class SyntaxNodeExtensions
         return EnumerateMembers(node.Members, abi, includeBlocks);
     }
 
+    public static IEnumerable<MemberNode> EnumerateAllMembers(this MemberBlockNode node, bool includeBlocks = false)
+    {
+        return EnumerateAllMembers(node.Members, includeBlocks);
+    }
+
+    public static IEnumerable<MemberNode> EnumerateMembers(this MemberBlockNode node, Version? abi, bool includeBlocks = false)
+    {
+        return EnumerateMembers(node.Members, abi, includeBlocks);
+    }
+
     private static IEnumerable<MemberNode> EnumerateAllMembers(ImmutableArray<MemberNode> members, bool includeBlocks)
     {
         foreach (var member in members)

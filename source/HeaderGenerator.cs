@@ -729,8 +729,7 @@ public class HeaderGenerator
 
             var thisAbi = i >= 0 ? abi[i] : null;
             var nextAbi = i + 1 < abi.Length ? abi[i + 1] : null;
-            var methods = node.EnumerateMembers(thisAbi).OfType<MethodNode>().Where(n => n.TryGetAttribute<RcxReturnAttribute>(out _));
-
+            
             writer.WriteLine("template<abi_t ABI, typename Impl, typename Interface>");
             WriteRequiresClause(abi, i, writer);
             writer.Write("class ");
@@ -756,12 +755,39 @@ public class HeaderGenerator
             writer.WriteLine();
             writer.WriteLine('{');
             writer.Indent++;
+            bool newLine = false;
 
-            foreach (var (j, method) in methods.Index())
+            foreach (var member in node.EnumerateMembers(thisAbi, includeBlocks: true))
             {
-                if (j > 0)
+                if (member is MemberBlockNode or MemberBlockEndNode)
+                {
+                    MemberBlockNode block;
+
+                    if (member is MemberBlockEndNode end)
+                        block = end.Block;
+                    else
+                        block = (MemberBlockNode)member;
+
+                    if (!block.EnumerateMembers(thisAbi).Any(n => n.TryGetAttribute<RcxReturnAttribute>(out _)))
+                        continue;
+
+                    if (newLine && member is MemberBlockNode)
+                    {
+                        writer.WriteLine();
+                        newLine = false;
+                    }
+
+                    HandleConditionalAttribute(member, writer, end: member is MemberBlockEndNode);
+                    continue;
+                }
+
+                if (member is not MethodNode method || !member.TryGetAttribute<RcxReturnAttribute>(out _))
+                    continue;
+
+                if (newLine)
                     writer.WriteLine();
 
+                HandleConditionalAttribute(method, writer, false);
                 var builder = ImmutableArray.CreateBuilder<ParameterNode>();
                 builder.Add(thisParam);
 
@@ -813,6 +839,8 @@ public class HeaderGenerator
                 writer.WriteLine(");");
                 writer.Indent--;
                 writer.WriteLine('}');
+                HandleConditionalAttribute(method, writer, true);
+                newLine = true;
             }
 
             writer.Indent--;
