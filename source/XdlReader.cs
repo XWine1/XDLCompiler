@@ -279,15 +279,24 @@ public sealed class XdlReader
     {
         Expect(TokenId.Enum);
         string? name = null;
-        BaseTypeNode? baseType = null;
         ImmutableArray<EnumMemberNode> members = [];
+        var baseTypes = ImmutableArray.CreateBuilder<BaseTypeNode>();
 
         if (TryReadToken(TokenId.Identifier, out var token))
             name = token.ToString(_text);
-        
+
         if (TryReadToken(TokenId.Colon, out _))
-            baseType = new BaseTypeNode([], Expect(TokenId.Identifier).ToString(_text));
-        
+        {
+            TryReadAttributes(out var baseTypeAttributes);
+            baseTypes.Add(new BaseTypeNode(baseTypeAttributes, Expect(TokenId.Identifier).ToString(_text)));
+
+            while (TryReadToken(TokenId.Comma, out _))
+            {
+                TryReadAttributes(out baseTypeAttributes);
+                baseTypes.Add(new BaseTypeNode(baseTypeAttributes, Expect(TokenId.Identifier).ToString(_text)));
+            }
+        }
+
         if (TryPeekToken(TokenId.OpeningBrace, out _))
         {
             var builder = ImmutableArray.CreateBuilder<EnumMemberNode>();
@@ -295,7 +304,7 @@ public sealed class XdlReader
             members = builder.DrainToImmutable();
         }
 
-        return new EnumNode(attributes, name, baseType, members);
+        return new EnumNode(attributes, name, baseTypes.DrainToImmutable(), members);
     }
 
     private TypeDeclarationNode ReadDeclaration(ImmutableArray<AttributeNode> attributes)

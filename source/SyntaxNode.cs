@@ -57,10 +57,10 @@ public sealed record EnumMemberNode(
 public sealed record EnumNode(
     ImmutableArray<AttributeNode> Attributes,
     string? Name,
-    BaseTypeNode? BaseType,
+    ImmutableArray<BaseTypeNode> BaseTypes,
     ImmutableArray<EnumMemberNode> EnumMembers,
     bool IsConst = false,
-    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseType != null ? [BaseType] : [], [..EnumMembers], IsConst, Namespace)
+    string? Namespace = null) : TypeDeclarationNode(Attributes, Name, BaseTypes, [..EnumMembers], IsConst, Namespace)
 {
     /// <inheritdoc/>
     public override string DeclarationType => "enum";

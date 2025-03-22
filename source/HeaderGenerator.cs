@@ -169,7 +169,7 @@ public class HeaderGenerator
         // Forward declarations
         foreach (var node in _types.Values.OfType<TypeDeclarationNode>())
         {
-            if (node.TryGetAttribute<NoEmitAttribute>(out _))
+            if (node.TryGetAttribute<NoEmitAttribute>(out _) || node is EnumNode)
                 continue;
 
             SetNamespace(node.Namespace);
@@ -211,9 +211,23 @@ public class HeaderGenerator
 
         int written = 0;
 
-        foreach (var (i, node) in _types.Values.OfType<TypeDeclarationNode>().Index())
+        foreach (var (i, node) in _types.Values.OfType<EnumNode>().Index())
         {
             if (node.TryGetAttribute<NoEmitAttribute>(out _))
+                continue;
+
+            SetNamespace(node.Namespace);
+
+            if (written > 0)
+                writer.WriteLine();
+
+            WriteEnumDeclaration(node, writer);
+            written++;
+        }
+
+        foreach (var (i, node) in _types.Values.OfType<TypeDeclarationNode>().Index())
+        {
+            if (node.TryGetAttribute<NoEmitAttribute>(out _) || node is EnumNode)
                 continue;
 
             SetNamespace(node.Namespace);
@@ -360,14 +374,96 @@ public class HeaderGenerator
 
     private static void WriteEnumDeclaration(EnumNode node, IndentedTextWriter writer)
     {
+        var abi = GetEnumAbiVersions(node);
+
+        if (abi.Length == 0 && !node.TryGetAttribute<ForceAbiAttribute>(out _))
+        {
+            WriteNonVersionedEnumDeclaration(node, writer);
+            return;
+        }
+
+        writer.WriteLine("namespace details");
+        writer.WriteLine('{');
+        writer.Indent++;
+
+        for (int i = -1; i < abi.Length; i++)
+        {
+            if (i >= 0)
+                writer.WriteLine();
+
+            writer.WriteLine("template<abi_t ABI>");
+            WriteRequiresClause(abi, i, writer);
+            writer.Write("struct enum_");
+            writer.Write(node.Name);
+
+            if (i >= 0)
+                writer.Write("<ABI>");
+
+            writer.WriteLine();
+            writer.WriteLine('{');
+            writer.Indent++;
+            writer.Write("enum type");
+
+            foreach (var baseType in node.BaseTypes)
+            {
+                if (baseType.Exists(abi, i))
+                {
+                    writer.Write(" : ");
+                    writer.Write(baseType.Name);
+                    break;
+                }
+            }
+
+            writer.WriteLine();
+            writer.WriteLine('{');
+            writer.Indent++;
+
+            foreach (var member in node.EnumMembers)
+            {
+                if (!member.Exists(abi, i))
+                    continue;
+
+                HandleConditionalAttribute(member, writer, false);
+                writer.Write(member.Name);
+
+                if (member.Value != null)
+                {
+                    writer.Write(" = ");
+                    writer.Write(member.Value.Evaluate());
+                }
+
+                writer.WriteLine(',');
+                HandleConditionalAttribute(member, writer, true);
+            }
+
+            writer.Indent--;
+            writer.WriteLine("};");
+
+            writer.Indent--;
+            writer.WriteLine("};");
+        }
+
+        writer.Indent--;
+        writer.WriteLine('}');
+        writer.WriteLine();
+        writer.WriteLine("template<abi_t ABI>");
+        writer.Write("using ");
+        writer.Write(node.Name);
+        writer.Write(" = details::enum_");
+        writer.Write(node.Name);
+        writer.WriteLine("<ABI>::type;");
+    }
+
+    private static void WriteNonVersionedEnumDeclaration(EnumNode node, IndentedTextWriter writer)
+    {
         writer.Write(node.DeclarationType);
         writer.Write(' ');
         writer.Write(node.Name);
 
-        if (node.BaseType != null)
+        if (node.BaseTypes.Length > 0)
         {
             writer.Write(" : ");
-            writer.Write(node.BaseType.Name);
+            writer.Write(node.BaseTypes[0].Name);
         }
 
         writer.WriteLine();
@@ -376,6 +472,7 @@ public class HeaderGenerator
 
         foreach (var member in node.EnumMembers)
         {
+            HandleConditionalAttribute(member, writer, false);
             writer.Write(member.Name);
 
             if (member.Value != null)
@@ -385,6 +482,7 @@ public class HeaderGenerator
             }
 
             writer.WriteLine(',');
+            HandleConditionalAttribute(member, writer, true);
         }
 
         writer.Indent--;
@@ -963,6 +1061,13 @@ public class HeaderGenerator
         return false;
     }
 
+    private static Version[] GetEnumAbiVersions(EnumNode node)
+    {
+        var versions = new HashSet<Version>();
+        node.Accept(new EnumAbiVersionCollector(versions));
+        return [.. versions.Order()];
+    }
+
     private static Version[] GetDataAbiVersions(SyntaxNode node)
     {
         var versions = new HashSet<Version>();
@@ -1002,6 +1107,24 @@ public class HeaderGenerator
             return node.Name;
 
         return node.Namespace.Replace(".", "::") + "::" + node.Name;
+    }
+
+    private sealed class EnumAbiVersionCollector(ICollection<Version> versions) : SyntaxVisitor
+    {
+        public override void Visit(AttributeNode node)
+        {
+            base.Visit(node);
+
+            if (node.TryGetAttribute(out AbiAddedAttribute? added))
+            {
+                versions.Add(added.Version);
+            }
+
+            if (node.TryGetAttribute(out AbiRemovedAttribute? removed))
+            {
+                versions.Add(removed.Version);
+            }
+        }
     }
 
     private sealed class DataAbiVersionCollector(ICollection<Version> versions) : SyntaxVisitor

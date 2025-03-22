@@ -34,6 +34,14 @@ public static class SyntaxNodeExtensions
         return false;
     }
 
+    public static bool Exists(this IAttributableNode node, IReadOnlyList<Version> abi, int index)
+    {
+        if (index < 0)
+            return Exists(node, null);
+
+        return Exists(node, abi[index]);
+    }
+
     public static bool Exists(this IAttributableNode node, Version? version)
     {
         version ??= s_Version0;

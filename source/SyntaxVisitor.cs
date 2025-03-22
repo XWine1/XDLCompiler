@@ -21,7 +21,10 @@ public abstract class SyntaxVisitor : ISyntaxVisitor
             attribute.Accept(this);
         }
 
-        node.BaseType?.Accept(this);
+        foreach (var baseType in node.BaseTypes)
+        {
+            baseType.Accept(this);
+        }
 
         foreach (var member in node.Members)
         {
