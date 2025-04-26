@@ -54,7 +54,7 @@ public class HeaderGenerator
         return Path.GetFileNameWithoutExtension(xdlName) + ".g.h";
     }
 
-    public void GenerateHeader(string fileName, string? factoryName, IndentedTextWriter writer)
+    public void GenerateHeader(string fileName, string? prefix, IndentedTextWriter writer)
     {
         ParseFile(fileName, _types);
         var headerName = GetHeaderName(fileName);
@@ -125,8 +125,8 @@ public class HeaderGenerator
         foreach (var node in _types.Values)
             node.Accept(new AbiVersionVisitor(_allTypes, _versions));
 
-        if (!string.IsNullOrEmpty(factoryName))
-            GenerateFactory(writer, factoryName);
+        if (!string.IsNullOrEmpty(prefix))
+            GenerateFactory(writer, prefix);
 
         writer.WriteLine();
         writer.WriteLine($"#endif // {includeGuard}");
@@ -279,11 +279,11 @@ public class HeaderGenerator
         }
     }
 
-    public void GenerateImpls(IndentedTextWriter writer)
+    public void GenerateImpls(string prefix, IndentedTextWriter writer)
     {
         var remap2 = new Dictionary<string, string>();
 
-        foreach (var node in _types.Values.OfType<TypeDeclarationNode>())
+        foreach (var node in _allTypes.Values.OfType<TypeDeclarationNode>())
         {
             if (node.TryGetAttribute<NoEmitAttribute>(out _))
                 continue;
@@ -304,42 +304,148 @@ public class HeaderGenerator
                 remap2.Add(node.Name + "Vtbl", vtbl);
             }
         }
-
+        
         foreach (var (i, node) in _types.Values.OfType<InterfaceNode>().Index())
         {
             if (i > 0)
                 writer.WriteLine();
 
+            var generated = new HashSet<TypeNode>();
+            var className = GetImplName(node.Name);
+
+            if (string.IsNullOrEmpty(className))
+                continue;
+
             writer.WriteLine("//");
             writer.WriteLine($"// {node.Name}");
             writer.WriteLine("//");
+            writer.WriteLine();
 
-            foreach (var (j, method) in node.EnumerateAllMembers().OfType<MethodNode>().Index())
+            writer.WriteLine("// .hpp:");
+            writer.WriteLine();
+
+            writer.WriteLine("template<abi_t ABI>");
+            writer.WriteLine($"class {className} : public {remap2!.GetValueOrDefault(node.Name, node.Name)}");
+            writer.WriteLine('{');
+            writer.WriteLine("public:");
+            writer.Indent++;
+
+            void WriteMethodDecls(ref int written, TypeDeclarationNode node)
             {
-                if (j > 0)
-                    writer.WriteLine();
+                if (generated.Contains(node))
+                    return;
 
-                CFormatter.Write(method, writer, remap2);
-                writer.WriteLine();
-                writer.WriteLine('{');
-                writer.Indent++;
-                writer.WriteLine("IMPLEMENT_STUB();");
+                generated.Add(node);
 
-                if (method.Signature.ReturnType is NamedTypeNode { Name: "HRESULT" })
-                    writer.WriteLine("return E_NOTIMPL;");
-                else if (method.Signature.ReturnType is not NamedTypeNode { Name: "void" })
-                    writer.WriteLine("return {};");
+                foreach (var baseType in node.BaseTypes)
+                {
+                    WriteMethodDecls(ref written, _allTypes[baseType.Name]);
+                }
 
-                writer.Indent--;
-                writer.WriteLine('}');
+                var methods = node.EnumerateAllMembers().OfType<MethodNode>();
+
+                if (methods.Any())
+                {
+                    if (written > 0)
+                        writer.WriteLine();
+
+                    writer.WriteLine("//");
+                    writer.WriteLine($"// {node.Name}");
+                    writer.WriteLine("//");
+                    written++;
+                }
+
+                foreach (var method in methods)
+                {
+                    CFormatter.Write(method, writer, remap2);
+                    writer.WriteLine(';');
+                }
             }
+
+            void WriteMethodDefs(ref int written, TypeDeclarationNode node)
+            {
+                if (generated.Contains(node))
+                    return;
+
+                generated.Add(node);
+
+                foreach (var baseType in node.BaseTypes)
+                {
+                    WriteMethodDefs(ref written, _allTypes[baseType.Name]);
+                }
+
+                var methods = node.EnumerateAllMembers().OfType<MethodNode>();
+
+                if (methods.Any())
+                {
+                    writer.WriteLine();
+                    writer.WriteLine("//");
+                    writer.WriteLine($"// {node.Name}");
+                    writer.WriteLine("//");
+                    written++;
+                }
+
+                foreach (var (index, method) in methods.Index())
+                {
+                    if (index > 0)
+                        writer.WriteLine();
+
+                    writer.WriteLine("template<abi_t ABI>");
+                    CFormatter.Write(method with { Name = $"{className}<ABI>::{method.Name}" }, writer, remap2);
+                    writer.WriteLine();
+                    writer.WriteLine('{');
+                    writer.Indent++;
+                    writer.WriteLine("IMPLEMENT_STUB();");
+
+                    if (method.Signature.ReturnType is NamedTypeNode { Name: "HRESULT" })
+                        writer.WriteLine("return E_NOTIMPL;");
+                    else if (method.Signature.ReturnType is not NamedTypeNode { Name: "void" })
+                        writer.WriteLine("return {};");
+
+                    writer.Indent--;
+                    writer.WriteLine('}');
+                }
+            }
+
+            int written = 0;
+            WriteMethodDecls(ref written, node);
+
+            writer.Indent--;
+            writer.WriteLine("};");
+            writer.WriteLine();
+
+            writer.WriteLine("#undef ABI_INTERFACE");
+            writer.WriteLine($"#define ABI_INTERFACE(ABI) {className}<ABI>");
+            writer.WriteLine($"{prefix.ToUpperInvariant()}_DECLARE_ABI_TEMPLATES(extern);");
+            writer.WriteLine();
+            writer.WriteLine("// .cpp:");
+
+            written = 0;
+            generated.Clear();
+            WriteMethodDefs(ref written, node);
+
+            writer.WriteLine();
+            writer.WriteLine("#undef ABI_INTERFACE");
+            writer.WriteLine($"#define ABI_INTERFACE(ABI) {className}<ABI>");
+            writer.WriteLine($"{prefix.ToUpperInvariant()}_DECLARE_ABI_TEMPLATES();");
         }
     }
 
-    private void GenerateFactory(IndentedTextWriter writer, string name)
+    private static string? GetImplName(string? interfaceName)
+    {
+        if (string.IsNullOrEmpty(interfaceName))
+            return null;
+
+        if (interfaceName.StartsWith('I'))
+            return interfaceName[1..];
+
+        return interfaceName;
+    }
+
+    private void GenerateFactory(IndentedTextWriter writer, string prefix)
     {
         writer.WriteLine("template<template<abi_t> typename T>");
-        writer.WriteLine($"inline HRESULT {name}(abi_t ABI, void **ppvObject)");
+        writer.WriteLine($"inline HRESULT {prefix}CreateInstance(abi_t ABI, void **ppvObject)");
         writer.WriteLine('{');
         writer.Indent++;
         writer.WriteLine("if (ppvObject == nullptr)");
@@ -370,6 +476,22 @@ public class HeaderGenerator
         writer.WriteLine("return S_OK;");
         writer.Indent--;
         writer.WriteLine('}');
+
+        writer.WriteLine();
+        writer.WriteLine($"#define {prefix.ToUpperInvariant()}_DECLARE_ABI_TEMPLATES(prefix) \\");
+        writer.Indent++;
+
+        foreach (var (i, abi) in _versions.Order().Index())
+        {
+            if (i > 0)
+                writer.WriteLine("; \\");
+
+            var v = $"abi_t{{{abi.Major},{abi.Minor},{abi.Build},{abi.Revision}}}";
+            writer.Write($"prefix template class ABI_INTERFACE(({v}))");
+        }
+
+        writer.Indent--;
+        writer.WriteLine();
     }
 
     private static void WriteEnumDeclaration(EnumNode node, IndentedTextWriter writer)

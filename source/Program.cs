@@ -7,7 +7,7 @@ static void Run(string[] args)
 {
     if (args.Length < 2)
     {
-        Console.WriteLine("usage: xdl input.xdl output_dir [factory_name]");
+        Console.WriteLine("usage: xdl input.xdl output_dir [prefix]");
         return;
     }
 
@@ -22,9 +22,10 @@ static void Run(string[] args)
         generator.GenerateHeader(args[0], args.Length > 2 ? args[2] : null, writer);
     }
 
-    using (var file = new StreamWriter(File.Create(Path.Combine(args[1], "impls_" + headerName))))
-    using (var writer = new IndentedTextWriter(file))
+    if (args.Length > 2)
     {
-        generator.GenerateImpls(writer);
+        using var file = new StreamWriter(File.Create(Path.Combine(args[1], "impls_" + headerName)));
+        using var writer = new IndentedTextWriter(file);
+        generator.GenerateImpls(args[2], writer);
     }
 }

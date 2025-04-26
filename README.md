@@ -5,23 +5,25 @@ XDL is a definition language similar to Microsoft IDL but with versioning suppor
 ### Usage
 
 ```bash
-xdl <input_file>.xdl <output_dir> [factory_name]
+xdl <input_file>.xdl <output_dir> [prefix]
 ```
 
 `input_file` : the name of the input xdl file
 
 `output_dir` : the folder where headers are generated into
 
-`factory_name` : the name of the factory function that would create a type instance given a type and an ABI version, if no factory name is specified then no factory function is generated
+`prefix` : the prefix to use for the generated factory function and template macros, if no prefix is specified then none of that is generated
 
 The factory function is defined like this
 
 ```cpp
 template<template<abi_t> typename T>
-inline HRESULT FactoryFunctionName(abi_t ABI, void **ppvObject)
+inline HRESULT PrefixCreateInstance(abi_t ABI, void **ppvObject)
 ```
 
-and can be used like this
+So if `prefix` was set to `Example`, the factory will be named `ExampleCreateInstance`.
+
+It can be used like this:
 
 ```cpp
 abi_t abi;
@@ -31,10 +33,10 @@ abi.Build = 15063;
 abi.Revision = 0;
 
 IVersionedClassFactory* pClass;
-HRESULT hr = FactoryFunctionName<VersionedClassFactory>(abi, (void**)&pClass);
+HRESULT hr = PrefixCreateInstance<VersionedClassFactory>(abi, (void**)&pClass);
 ```
 
-The factory class can be defined like this
+The factory class can be defined like this:
 
 ```csharp
 [no_uuid]
@@ -46,11 +48,10 @@ interface IVersionedClassFactory
 [force_abi]
 class VersionedClassFactory : IVersionedClassFactory
 {
-
 };
 ```
 
-and the implementation of `CreateMyVersionedClass` can look like this
+and the implementation of `CreateMyVersionedClass` can look like this:
 
 ```cpp
 HRESULT CreateMyVersionedClass(void** ppClass)
@@ -102,7 +103,6 @@ namespace simple_example
     
     class SimpleClass : ISimpleClass
     {
-        
     };
 }
 ```
@@ -136,7 +136,6 @@ namespace gfx
     
     class SomeGraphicsClass : IGraphicsClass
     {
-        
     };
     
     enum MemoryPressure
@@ -182,7 +181,6 @@ namespace gfx
     
     class MemoryManager : [removed(10,0,26100,0)] IMemoryManager, [added(10,0,22631,0)] IMemoryManager2
     {
-        
     };
 }
 ```
