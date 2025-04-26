@@ -289,15 +289,20 @@ public class HeaderGenerator
                 continue;
 
             var name = GetQualifiedName(node)!;
+            var impl = name + "_Impl";
             var vtbl = name + "Vtbl";
 
             if (_abiTypes.Contains(node.Name!))
             {
                 name += "<ABI>";
+                impl += "<ABI>";
                 vtbl += "<ABI>";
             }
 
             remap2.TryAdd(node.Name!, name);
+
+            if (HasRcxReturnMethods(node))
+                remap2.TryAdd(node.Name! + "_Impl", impl);
 
             if (node is InterfaceNode)
             {
@@ -316,6 +321,12 @@ public class HeaderGenerator
             if (string.IsNullOrEmpty(className))
                 continue;
 
+            var interfaceName = node.Name;
+            bool hasRcxReturnMethods = HasRcxReturnMethods(node);
+
+            if (hasRcxReturnMethods)
+                interfaceName += "_Impl";
+
             writer.WriteLine("//");
             writer.WriteLine($"// {node.Name}");
             writer.WriteLine("//");
@@ -325,7 +336,7 @@ public class HeaderGenerator
             writer.WriteLine();
 
             writer.WriteLine("template<abi_t ABI>");
-            writer.WriteLine($"class {className} : public {remap2!.GetValueOrDefault(node.Name, node.Name)}");
+            writer.WriteLine($"class {className} : public {remap2!.GetValueOrDefault(interfaceName, interfaceName)}");
             writer.WriteLine('{');
             writer.WriteLine("public:");
             writer.Indent++;
