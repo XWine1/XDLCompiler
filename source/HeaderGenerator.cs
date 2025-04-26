@@ -309,10 +309,15 @@ public class HeaderGenerator
                 remap2.Add(node.Name + "Vtbl", vtbl);
             }
         }
+
+        int implWritten = 0;
         
-        foreach (var (i, node) in _types.Values.OfType<InterfaceNode>().Index())
+        foreach (var node in _types.Values.OfType<InterfaceNode>())
         {
-            if (i > 0)
+            if (node.TryGetAttribute<NoImplAttribute>(out _))
+                continue;
+
+            if (implWritten > 0)
                 writer.WriteLine();
 
             var generated = new HashSet<TypeNode>();
@@ -439,6 +444,7 @@ public class HeaderGenerator
             writer.WriteLine("#undef ABI_INTERFACE");
             writer.WriteLine($"#define ABI_INTERFACE(ABI) {className}<ABI>");
             writer.WriteLine($"{prefix.ToUpperInvariant()}_DECLARE_ABI_TEMPLATES();");
+            implWritten++;
         }
     }
 
