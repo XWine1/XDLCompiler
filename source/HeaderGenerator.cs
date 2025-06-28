@@ -498,7 +498,7 @@ public class HeaderGenerator
         writer.WriteLine($"#define {prefix.ToUpperInvariant()}_DECLARE_ABI_TEMPLATES(prefix) \\");
         writer.Indent++;
 
-        foreach (var (i, abi) in _versions.Order().Index())
+        foreach (var (i, abi) in _versions.Concat([new Version(0, 0, 0, 0)]).Order().Index())
         {
             if (i > 0)
                 writer.WriteLine("; \\");
